@@ -1,0 +1,141 @@
+/**
+ * @file clock.c
+ * @author Christian Goertz (chris.goertz@gmx.de)
+ * @brief
+ * @version 0.1
+ * @date 2024-02-02
+ *
+ * @copyright Copyright (c) 2024
+ *
+ */
+#include "clock.h"
+#include "../ssd1306/ssd1306.h"
+#include "time_utils.h"
+#include <math.h>
+
+Clock::Clock(SSD1306_VERTEX center, uint8_t radius, SSD1306_COLOR color) {
+  this->center = center;
+  this->radius = radius;
+  this->color = color;
+  this->need_redraw = true;
+}
+
+void Clock::draw() {
+  if (this->need_redraw) {
+    drawFace();
+    drawHoursHand(&(this->center), &(this->radius), &(time.hours), White);
+    drawMinutesHand(&(this->center), &(this->radius), &(time.minutes), White);
+    drawSecondsHand(&(this->center), &(this->radius), &(time.seconds), White);
+  }
+}
+
+void Clock::drawFace() {
+  /* prequesites */
+  uint8_t steps = GFX_CLOCK_DEGREE_STEPS;
+  SSD1306_VERTEX inner_point = {0, 0};
+  SSD1306_VERTEX outer_point = {0, 0};
+  const uint32_t r = radius - GFX_CLOCK_HOUR_MARK_GAP;
+  /* clear clock face area out */
+  ssd1306_FillCircle(this->center.x, this->center.y, this->radius, Black);
+
+  for (uint16_t pos = 0; pos <= 60; ++pos) {
+    float angle = pos * GFX_CLOCK_MINUTE_MARK_SPACING; // 360 Grad / 12 Stunden
+                                                       // = 30 Grad pro Stunde
+    float angle_rad =
+        angle * (MATH_PI / GFX_PI_IN_DEGREES); // Umrechnung in Bogenmaß
+    float cos = cosf(angle_rad);
+    float sin = sinf(angle_rad);
+    float mark_factor = 0.0f;
+    // calculate coords for hour marks
+    if (pos % 5) {
+      mark_factor = GFX_CLOCK_MINUTE_MARK_FACTOR;
+    } else {
+      mark_factor = GFX_CLOCK_HOUR_MARK_FACTOR;
+    }
+
+    inner_point.x = static_cast<uint8_t>(round(
+      (cos * (static_cast<float>(r) * mark_factor) + this->center.x)));
+    inner_point.y = static_cast<uint8_t>(round(
+      (sin * (static_cast<float>(r) * mark_factor) + this->center.y)));
+    outer_point.x = static_cast<uint8_t>(round((cos * static_cast<float>(r) + this->center.x)));
+    outer_point.y = static_cast<uint8_t>(round((sin * static_cast<float>(r) + this->center.y)));
+    // Draw the hour marks
+    ssd1306_Line(inner_point.x, inner_point.y, outer_point.x, outer_point.y,
+                 White);
+  }
+
+  // Draw outer circle
+  ssd1306_DrawCircle(this->center.x, this->center.y, this->radius, White);
+}
+
+/*********************************************************************/
+void Clock::drawHoursHand(SSD1306_VERTEX *center, uint32_t *radius,
+                          uint8_t *hour, SSD1306_COLOR c) {
+  SSD1306_VERTEX center_point = {0, 0};
+  SSD1306_VERTEX end_point = {0, 0};
+
+  float angle =
+      ((*hour + GFX_CLOCK_HOUR_OFFSET) % 12) * GFX_CLOCK_HOUR_MARK_SPACING;
+  float angle_rad = angle * (MATH_PI / GFX_PI_IN_DEGREES); // calculate radiant
+  float cos = cosf(angle_rad);
+  float sin = sinf(angle_rad);
+
+  end_point.x = static_cast<uint8_t>(round(
+    (cos * (static_cast<float>(*radius) * (.6f - GFX_CLOCK_HANDS_GAP)) + center->x)));
+  end_point.y = static_cast<uint8_t>(round(
+    (sin * (static_cast<float>(*radius) * (.6f - GFX_CLOCK_HANDS_GAP)) + center->y)));
+  // draw the clock hand
+  ssd1306_Line(center->x, center->y, end_point.x, end_point.y, White);
+}
+
+void Clock::drawMinutesHand(SSD1306_VERTEX *center, uint32_t *radius,
+                            uint8_t *minute, SSD1306_COLOR c) {
+  SSD1306_VERTEX end_point = {0, 0};
+
+  float angle = ((*minute + GFX_CLOCK_MINUTE_OFFSET) % 60) *
+                GFX_CLOCK_MINUTE_MARK_SPACING;
+  float angle_rad = angle * (MATH_PI / GFX_PI_IN_DEGREES); // calculate radiant
+  float cos = cosf(angle_rad);
+  float sin = sinf(angle_rad);
+
+  end_point.x = static_cast<uint8_t>(round(
+    (cos * (static_cast<float>(*radius) * (.9f - GFX_CLOCK_HANDS_GAP)) + center->x)));
+  end_point.y = static_cast<uint8_t>(round(
+    (sin * (static_cast<float>(*radius) * (.9f - GFX_CLOCK_HANDS_GAP)) + center->y)));
+  // draw the clock hand
+  ssd1306_Line(center->x, center->y, end_point.x, end_point.y, White);
+}
+
+void Clock::drawSecondsHand(SSD1306_VERTEX *center, uint32_t *radius,
+                            uint8_t *second, SSD1306_COLOR c) {
+  SSD1306_VERTEX end_point = {0, 0};
+
+  float angle = ((*second + GFX_CLOCK_SECOND_OFFSET) % 60) *
+                GFX_CLOCK_SECOND_MARK_SPACING;
+  float angle_rad = static_cast<float>(
+      angle * (MATH_PI / GFX_PI_IN_DEGREES)); // calculate radiant
+  float cos = cosf(angle_rad);
+  float sin = sinf(angle_rad);
+
+  // end_point.x = (uint8_t) round((cos * (float)*radius) + center->x);
+  end_point.x = static_cast<uint8_t>(
+      round((cos * static_cast<float>(*radius) + center->x)));
+  end_point.y = static_cast<uint8_t>(
+      round((sin * static_cast<float>(*radius) + center->y)));
+  // end_point.y = (uint8_t) round((sin * (float)*radius) + center->y);
+
+  // draw the clock hand
+  ssd1306_Line(center->x, center->y, end_point.x, end_point.y, White);
+}
+
+void Clock::setTime(uint8_t h, uint8_t m, uint8_t s, uint8_t us) {
+  this->time.hours = h;
+  this->time.minutes = m;
+  this->time.seconds = s;
+  this->time.milliseconds = us;
+}
+
+void Clock::increment() {
+  time_util_increment_seconds(&(this->time));
+  // this->time.seconds++;
+}
